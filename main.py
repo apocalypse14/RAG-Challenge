@@ -66,16 +66,21 @@ def generate_answer(relevant_chunks, query):
 
 
 def rag_pipeline(markdown_file, query, top_k=5):
-    start_time = time.time()
     chunks = preprocess_markdown(markdown_file)
+    emb_start_time = time.time()
     embeddings = model.encode(chunks, convert_to_tensor=True).tolist()
     embedding_matrix = np.array(embeddings)
+    emb_end_time = time.time()
+    print(f"Embeddings took {emb_end_time - emb_start_time:.4f} seconds.")
+    index_start_time= time.time()
     index = faiss.IndexFlatL2(embedding_matrix.shape[1])
     index.add(embedding_matrix)
-
+    index_end_time= time.time()
+    print(f"Indexing took {index_end_time - index_start_time:.4f} seconds.")
+    chunks_start_time= time.time()
     relevant_chunks = retrieve_relevant_chunks(query, index, model, chunks, top_k)
-    end_time = time.time()
-    print(f"Total RAG Pipeline took {end_time - start_time:.4f} seconds.")
+    chunks_end_time = time.time()
+    print(f"Chunking took {chunks_end_time - chunks_start_time:.4f} seconds.")
     return generate_answer(relevant_chunks, query)
 
 
@@ -90,13 +95,11 @@ if __name__ == '__main__':
     model = SentenceTransformer('all-MiniLM-L6-v2')
     tokenizer.pad_token = tokenizer.eos_token
     markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\regex-tutorial.md'  # file_path
-    query = "What is regex?"
+    query = ("What are regular expressions?")
     conf_end_time = time.time()
     print(f"Configuration took {conf_end_time - configuration_time:.4f} seconds.")
     answer = rag_pipeline(markdown_file, query)
     print("\n")
     print(answer)
-    # Load model directly
-    from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
