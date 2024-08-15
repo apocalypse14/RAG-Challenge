@@ -1,6 +1,6 @@
 import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from transformers import GPTNeoForCausalLM, AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from sentence_transformers import SentenceTransformer
 import torch
 import faiss
@@ -81,8 +81,6 @@ if __name__ == '__main__':
     start_time = time.time()
     device = torch.device("cpu")
     model = "EleutherAI/gpt-neo-1.3B"
-    # "meta-llama/Meta-Llama-3.1-8B-Instruct" is a huge model which slows down the process of generating  an answer
-    # extremely
     # model = "gpt2"  # this is the smaller model I used to test the outputs
     tokenizer = AutoTokenizer.from_pretrained(model)
     gpt_model = AutoModelForCausalLM.from_pretrained(model).to(device)
@@ -93,7 +91,7 @@ if __name__ == '__main__':
     markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\regex-tutorial.md'  # file_path
 
     # This is the question that will be queried on the specified file.
-    query = ("Who is the current president in the US?")
+    query = ("Who is Michael Jackson?")
     answer = rag_pipeline(markdown_file, query)
     end_time = time.time()
     print("\n")
