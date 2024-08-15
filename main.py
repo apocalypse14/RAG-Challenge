@@ -1,3 +1,5 @@
+import os
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import GPTNeoForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from sentence_transformers import SentenceTransformer
@@ -21,6 +23,16 @@ def preprocess_markdown(markdown_file):
     end_time = time.time()
     print(f"Preprocessing Markdown took {end_time - start_time:.4f} seconds.")
     return chunks
+
+
+def save_embeddings(embedding_matrix, file_path):
+    np.save(file_path, embedding_matrix)
+    print(f"Embeddings saved to {file_path}")
+
+def load_embeddings(file_path):
+    embedding_matrix = np.load(file_path)
+    print(f"Embeddings loaded from {file_path}")
+    return embedding_matrix
 
 
 def retrieve_relevant_chunks(query, index, model, chunks, top_k=5):
@@ -65,19 +77,25 @@ def generate_answer(relevant_chunks, query):
     return answer if answer else "I don't know."
 
 
-def rag_pipeline(markdown_file, query, top_k=5):
+def rag_pipeline(markdown_file, query, top_k=5, embeddings_file="embeddings.npy"):
     chunks = preprocess_markdown(markdown_file)
-    emb_start_time = time.time()
-    embeddings = model.encode(chunks, convert_to_tensor=True).tolist()
-    embedding_matrix = np.array(embeddings)
-    emb_end_time = time.time()
-    print(f"Embeddings took {emb_end_time - emb_start_time:.4f} seconds.")
-    index_start_time= time.time()
+
+    if os.path.exists(embeddings_file):
+        embedding_matrix = load_embeddings(embeddings_file)
+    else:
+        emb_start_time = time.time()
+        embeddings = model.encode(chunks, convert_to_tensor=True).tolist()
+        embedding_matrix = np.array(embeddings)
+        emb_end_time = time.time()
+        print(f"Embeddings took {emb_end_time - emb_start_time:.4f} seconds.")
+        save_embeddings(embedding_matrix, embeddings_file)
+
+    index_start_time = time.time()
     index = faiss.IndexFlatL2(embedding_matrix.shape[1])
     index.add(embedding_matrix)
-    index_end_time= time.time()
+    index_end_time = time.time()
     print(f"Indexing took {index_end_time - index_start_time:.4f} seconds.")
-    chunks_start_time= time.time()
+    chunks_start_time = time.time()
     relevant_chunks = retrieve_relevant_chunks(query, index, model, chunks, top_k)
     chunks_end_time = time.time()
     print(f"Chunking took {chunks_end_time - chunks_start_time:.4f} seconds.")
@@ -88,10 +106,11 @@ if __name__ == '__main__':
     configuration_time = time.time()
     device = torch.device("cpu")
     model = "EleutherAI/gpt-neo-1.3B"
-    # "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    # "meta-llama/Meta-Llama-3.1-8B-Instruct" is a huge model which slows down the process of generating  an answer
+    # extremely
     # model = "gpt2"  # this is the smaller model I used to test the outputs
     tokenizer = AutoTokenizer.from_pretrained(model)
-    gpt_model = AutoModelForCausalLM.from_pretrained(model).to(device)  # This needs changing depending on the model used.
+    gpt_model = AutoModelForCausalLM.from_pretrained(model).to(device)
     model = SentenceTransformer('all-MiniLM-L6-v2')
     tokenizer.pad_token = tokenizer.eos_token
     markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\regex-tutorial.md'  # file_path
@@ -101,5 +120,3 @@ if __name__ == '__main__':
     answer = rag_pipeline(markdown_file, query)
     print("\n")
     print(answer)
-
-
