@@ -1,23 +1,43 @@
 import os
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import re
 from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 import faiss
 import numpy as np
 import time
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def preprocess_markdown(filepath):
     with open(filepath, 'r', encoding='utf-8') as file:
         text = file.read()
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=256,
-        chunk_overlap=25,
-        separators=["\n\n", "\n", " ", ""]
-    )
-    chunks = splitter.split_text(text)
-    return chunks
+
+    text = re.sub(r'\n\s*\n', '\n', text)
+    sections = re.split(r'(## .*)', text)
+
+    headers = []
+    section_map = {}
+
+    for i in range(1, len(sections), 2):
+        header = sections[i].strip()
+        content = sections[i + 1].strip()
+
+        # A section starts with ## and ends with a .
+        content = re.split(r'(## .*)', content)[0].strip()
+        headers.append(header)
+        section_map[header] = content
+    return headers, section_map
+
+
+def find_best_matching_header(query, headers, model):
+    header_embeddings = model.encode(headers, convert_to_tensor=True)
+    query_embedding = model.encode([query], convert_to_tensor=True)
+
+    similarities = cosine_similarity(query_embedding, header_embeddings).flatten()
+
+    best_index = np.argmax(similarities) # this returns the index of the best matching header
+    return headers[best_index]
 
 
 def save_embeddings(embedding_matrix, file_path):
@@ -31,11 +51,19 @@ def load_embeddings(file_path):
     return embedding_matrix
 
 
-def retrieve_relevant_chunks(query, index, model, chunks, top_k=5):
-    query_embedding = model.encode([query], convert_to_tensor=True).cpu().numpy()
-    distances, indices = index.search(query_embedding, top_k)
-    relevant_chunks = [chunks[i] for i in indices[0]]  # list of chunks
-    return relevant_chunks
+def generate_summary(context):
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+    summary = summarizer(context, max_length=150, min_length=50, do_sample=False)
+    return summary[0]['summary_text']
+
+
+def generate_answer(context, query):
+    print("Context: " + context)
+    print("Question: " + query + "\n")
+    summary = generate_summary(context)
+    # I can also combine the summary with the query for fine-tuning, but just the summary is faster:
+    # prompt_template = f"""Context: {summary}\nQuestion: {query}"""
+    return clean_output(summary)
 
 
 def clean_output(answer):
@@ -46,59 +74,29 @@ def clean_output(answer):
     return cleaned_answer
 
 
-def generate_answer(relevant_chunks, query):
-    context = "".join(relevant_chunks)
-    prompt_template = f"""Context: {context}\nQuestion: {query}"""
-    inputs = tokenizer.encode(prompt_template, return_tensors="pt").to(device)
-    attention_mask = torch.ones(inputs.shape, dtype=torch.long)
-
-    outputs = gpt_model.generate(
-        inputs,
-        attention_mask=attention_mask,
-        max_new_tokens=50,  # better than max_length since it input query is excluded
-        # max_new_token length affects the speed of output generation.
-        num_return_sequences=1,
-        repetition_penalty=2.0,  # reduce repetition
-        pad_token_id=tokenizer.pad_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-        do_sample=False,
-    )
-    answer = tokenizer.decode(outputs[0], skip_special_tokens=True, clean_up_tokenization_spaces=False).strip()
-    return clean_output(answer)
-
-
-def rag_pipeline(markdown_file, query, top_k=5, embeddings_file="embeddings.npy"):
-    chunks = preprocess_markdown(markdown_file)
-    if os.path.exists(embeddings_file):
-        embedding_matrix = load_embeddings(embeddings_file)
-    else:
-        embeddings = model.encode(chunks, convert_to_tensor=True).tolist()
-        embedding_matrix = np.array(embeddings)
-        save_embeddings(embedding_matrix, embeddings_file)
-
-    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
-    index.add(embedding_matrix)
-    relevant_chunks = retrieve_relevant_chunks(query, index, model, chunks, top_k)
-    return generate_answer(relevant_chunks, query)
+def rag_pipeline(markdown_file, query, embeddings_file="embeddings.npy"):
+    headers, section_map = preprocess_markdown(markdown_file)
+    best_header = find_best_matching_header(query, headers, model)
+    context = section_map[best_header]
+    # Don't need for Faiss search since I only use a single context
+    return generate_answer(context, query)
 
 
 if __name__ == '__main__':
     start_time = time.time()
     device = torch.device("cpu")  # use cpu
     model = "EleutherAI/gpt-neo-1.3B"
-    # model = "gpt2"  # this is the smaller model I used to test the outputs
     tokenizer = AutoTokenizer.from_pretrained(model)
     gpt_model = AutoModelForCausalLM.from_pretrained(model).to(device)
     model = SentenceTransformer("all-MiniLM-L6-v2")
     tokenizer.pad_token = tokenizer.eos_token
 
     # This part should be tailored depending on the md file used.
-    markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\regex-tutorial.md'  # file_path
+    markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\git-tutorial.md'  # file_path
 
     # This is the question that will be queried on the specified file.
-    query = ("What is a regular expression?")
+    query = "how do I use branches in git?"
     answer = rag_pipeline(markdown_file, query)
     end_time = time.time()
-    print("\n")
-    print(answer + "\n")
+    print("Answer: " + answer)
     print("The response took " + str(end_time - start_time) + "s.")
