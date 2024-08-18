@@ -10,6 +10,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 def preprocess_markdown(markdown_file):
+    if not os.path.exists(markdown_file):
+        raise FileNotFoundError(f"Markdown file {markdown_file} not found.")
     with open(markdown_file, 'r', encoding='utf-8') as file:
         text = file.read()
     text = re.sub(r'\n\s*\n', '\n', text)  # remove empty lines
@@ -42,6 +44,8 @@ def preprocess_markdown(markdown_file):
 
 
 def retrieve_relevant_chunks(query, index, model, chunks, top_k=5):
+    if not query.strip():
+        return ["The query is empty or invalid."]
     query_embedding = model.encode([query], convert_to_tensor=True).cpu().numpy()
     distances, indices = index.search(query_embedding, top_k)
     if len(indices[0]) == 0:
@@ -73,7 +77,9 @@ def clean_output(answer):
 def generate_answer(relevant_chunks, query):
     context = " ".join(relevant_chunks)
     prompt_template = f"""Context: {context}\nQuestion: {query}"""
-    inputs = tokenizer.encode(prompt_template, return_tensors="pt").to(device)
+    max_input_length = tokenizer.model_max_length - 50
+    inputs = tokenizer.encode(prompt_template, return_tensors="pt", max_length=max_input_length,
+                              truncation=True).to(device)
     attention_mask = torch.ones(inputs.shape, dtype=torch.long)
     outputs = gpt_model.generate(
         inputs,
@@ -101,6 +107,8 @@ def rag_pipeline(markdown_file, query, top_k=5, embeddings_file="embeddings.npy"
         save_embeddings(embedding_matrix, embeddings_file)
     # For Debugging: FAISS index dimension
     # print(f"Embedding matrix shape: {embedding_matrix.shape}")
+    if embedding_matrix.shape[0] == 0:
+        raise ValueError("Embedding matrix is empty.")
     index = faiss.IndexFlatL2(embedding_matrix.shape[1])
     index.add(embedding_matrix)
     relevant_chunks = retrieve_relevant_chunks(query, index, embedding_model, chunks, top_k)
@@ -116,7 +124,7 @@ if __name__ == '__main__':
     embedding_model = SentenceTransformer("all-mpnet-base-v2")
     tokenizer.pad_token = tokenizer.eos_token
     markdown_file = r'C:\Users\User\PycharmProjects\CokGüzelOlacak\Data\git-tutorial.md'
-    query = "how to inspect a remote?"  # Ask a question here about the git-tutorial.md
+    query = "how do merge conflicts occur?"  # Ask a question here about the git-tutorial.md
     answer = rag_pipeline(markdown_file, query)
     end_time = time.time()
     print("-----------------------------------------------------------------------------------------------------------")
