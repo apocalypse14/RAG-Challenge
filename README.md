@@ -31,9 +31,14 @@ Embedding Creation: Each chunk of text is converted into a numerical representat
 Storage & Retrieval: Embeddings are stored and indexed using FAISS, enabling fast retrieval of the most relevant chunks based on user queries.
 Response Generation: The relevant chunks are passed as context to GPT-Neo, which generates a coherent answer.
 
-Assumptions
+Assumptions:
 Markdown Structure: It is assumed that the markdown files are well-structured, with clear headers indicated by "##" and content organization. The outputs are mainly tested on the "git-tutorial.md". An ASCII-table 
-might not be read for example, because there is no mechanism in pre-processing function.
+for example might not be read, because there is no filtering mechanism for it in the pre-processing function.
 Document Size: The system is designed to handle medium-sized documents efficiently. For very large documents, chunking and processing times may increase. 
-Context Length: The model can handle a context length of up to 512 tokens, which should be sufficient for most queries. The context is also limited by the sentencemodel used. The sentence model must bu kept constant
-while storing embeddings because otherwise there is a vector mismatch.
+Max_Token: The model can handle a context length of up to 512 tokens, which should be sufficient for most queries. The max_token_length is dependent on the embedding model used. On the website "https://huggingface.co/spaces/mteb/leaderboard", the ranking of embeddings models can be found. The model I used "all-mpnet-base-v2" can handle maximum of 514 tokens for example. Important: The sentence model must bu kept constant while storing embeddings because otherwise there is a vector mismatch. This model I chose is not significantly big (0.41GB), but also not small. One of the models I used "bge-small-en-v1.5" is smaller (0.12GB)than the current model I have, which makes it also faster, but it could not retrieve the relevant chunks I wanted for my context, so I opted for the smallest embedding model I could found which 
+can also identify the relevant chunks for the query. Smaller models laod faster, which makes them desirable.
+
+Usecase: I designed the application to be a helper tool that one can use on his own computer locally to retrieve information from the documents uploaded. The generated answers are usually correct and always 
+related to the context, which makes it a great tool, when one doesn't one to search through every matching word on a markdown file using "Ctrl + F". 
+
+
