@@ -41,4 +41,8 @@ can also identify the relevant chunks for the query. Smaller models laod faster,
 Usecase: I designed the application to be a helper tool that one can use on his own computer locally to retrieve information from the documents uploaded. The generated answers are usually correct and always 
 related to the context, which makes it a great tool, when one doesn't one to search through every matching word on a markdown file using "Ctrl + F". 
 
+Shortcoming: One of the biggest problem is that if the model doesn't find a relevant context from the retrieved chunks, it still generates an answer based on the available data. Therefore, I also print the context
+with the answer, so that the user can interpret if the model is hallucinating or using the context.
+
+Future Improvements: This RAG pipeline can definitely be improved for the future by using better GPT models and embedding models to allow for more concise and complicated answers. As a vector database ChromaDB can be used. Saving embeddings locally demands a lot of space, which is why the application must be deployed elsewhere for upscaling and retriving information from throusands of files. 
 
