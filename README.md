@@ -1,5 +1,5 @@
 This repository contains my implementation of Retrieval-Augmented Generation (RAG) pipeline to extract knowledge from markdow files. 
-The solution allows users to query the documentation and receive accurate, contextually relevant answers.
+This implementation allows users to query the documentation and receive accurate, contextually relevant answers. 
 
 Overview
 There are two py.files that implements a RAG pipeline in this project. "main.py" creates chunks based on the headers and returns a summarization as an answer to the query, while "RAG_specialized.py" is a full RAG 
